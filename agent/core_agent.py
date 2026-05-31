@@ -1,9 +1,10 @@
-from crewai import Agent
-from tools.transaction_db_tool import TransactionHistoryTool
+import json
+from crewai import Agent, Crew, Process
+from tools.tool_search import TransactionHistoryTool
 
 _db_tool = TransactionHistoryTool()
 
-# ── Orchestrator ──────────────────────────────────────────────────────────────
+# ── Orchestrator ───────────────────────────────────────────────────────────────
 fraud_detection_agent = Agent(
     role="Fraud Detection Orchestrator",
     goal=(
@@ -19,7 +20,7 @@ fraud_detection_agent = Agent(
     verbose=True,
 )
 
-# ── Monitor Agent — flags surface-level anomalies ────────────────────────────
+# ── Monitor Agent — flags surface-level anomalies ─────────────────────────────
 monitor_agent = Agent(
     role="Transaction Anomaly Monitor",
     goal=(
@@ -35,7 +36,7 @@ monitor_agent = Agent(
     verbose=True,
 )
 
-# ── Analyst Agent — retrieves and interprets transaction history ──────────────
+# ── Analyst Agent — retrieves and interprets transaction history ───────────────
 analyst_agent = Agent(
     role="Transaction History Analyst",
     goal=(
@@ -51,7 +52,7 @@ analyst_agent = Agent(
     verbose=True,
 )
 
-# ── Risk Score Agent — fuses signals into a 0–100 score ──────────────────────
+# ── Risk Score Agent — fuses signals into a 0–100 score ───────────────────────
 risk_score_agent = Agent(
     role="Risk Score Calculator",
     goal=(
@@ -66,3 +67,15 @@ risk_score_agent = Agent(
     allow_delegation=False,
     verbose=True,
 )
+
+
+def build_crew(transaction_json: dict) -> Crew:
+    from agent.planner import create_tasks
+    tx_str = json.dumps(transaction_json, indent=2)
+    anomaly_task, history_task, risk_task, final_task = create_tasks(tx_str)
+    return Crew(
+        agents=[monitor_agent, analyst_agent, risk_score_agent, fraud_detection_agent],
+        tasks=[anomaly_task, history_task, risk_task, final_task],
+        process=Process.sequential,
+        verbose=True,
+    )

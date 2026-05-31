@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "updated_at": null,
+  "rules": [
+    {
+      "id": "rule_001",
+      "description": "Always recommend BLOCK for risk_score >= 86",
+      "condition": "risk_score >= 86",
+      "action": "BLOCK",
+      "violation_count": 0
+    },
+    {
+      "id": "rule_002",
+      "description": "Recommend REVIEW for risk_score between 61 and 85",
+      "condition": "61 <= risk_score <= 85",
+      "action": "REVIEW",
+      "violation_count": 0
+    },
+    {
+      "id": "rule_003",
+      "description": "Recommend APPROVE for risk_score <= 25",
+      "condition": "risk_score <= 25",
+      "action": "APPROVE",
+      "violation_count": 0
+    }
+  ]
+}

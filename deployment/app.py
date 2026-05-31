@@ -1,8 +1,7 @@
 """
 FastAPI wrapper for the AI Fraud Detection Agent.
 
-Run:
-    uvicorn api:app --reload
+    uvicorn deployment.app:app --reload
 
 POST /analyze   — analyze a transaction, returns a fraud risk report
 GET  /health    — liveness check
@@ -11,6 +10,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
+from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
@@ -18,13 +19,28 @@ from pydantic import BaseModel, Field
 
 load_dotenv()
 
-# Seed the DB on startup (no-op if already seeded)
 from data.setup_db import setup_database
 setup_database()
 
-from crew import build_crew
+from agent.core_agent import build_crew
+from deployment.config import settings
+from monitoring.langfuse_logger import LangfuseLogger
 
-app = FastAPI(title="AI Fraud Detection Agent", version="1.0.0")
+_tracer = LangfuseLogger()
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    yield
+    # Flush any buffered Langfuse events on shutdown so no traces are lost.
+    _tracer.flush()
+
+
+app = FastAPI(
+    title=settings.app_title,
+    version=settings.app_version,
+    lifespan=lifespan,
+)
 
 
 # ── Request / Response models ──────────────────────────────────────────────────
@@ -77,18 +93,36 @@ def health():
     return {"status": "ok"}
 
 
-@app.post("/analyze", response_model=FraudReport, tags=["fraud"], responses={500: {"description": "Agent error or non-JSON output"}})
+@app.post(
+    "/analyze",
+    response_model=FraudReport,
+    tags=["fraud"],
+    responses={500: {"description": "Agent error or non-JSON output"}},
+)
 async def analyze(transaction: TransactionRequest):
-    """
-    Analyze a financial transaction and return a fraud risk report.
-
-    The crew runs in a background thread so the async event loop is never blocked.
-    """
+    """Analyze a financial transaction and return a fraud risk report."""
     tx_dict = transaction.model_dump()
-    try:
-        report = await asyncio.to_thread(_run_crew_sync, tx_dict)
-    except ValueError as e:
-        raise HTTPException(status_code=500, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Agent error: {e}")
+    with _tracer.observe(
+        name=f"analyze/{transaction.transaction_id}",
+        as_type="span",
+        input=tx_dict,
+        metadata={"user_id": transaction.user_id},
+    ) as obs:
+        t0 = time.perf_counter()
+        try:
+            report = await asyncio.to_thread(_run_crew_sync, tx_dict)
+        except ValueError as e:
+            obs.update(output={"error": str(e)})
+            _tracer.flush()
+            raise HTTPException(status_code=500, detail=str(e))
+        except Exception as e:
+            obs.update(output={"error": str(e)})
+            _tracer.flush()
+            raise HTTPException(status_code=500, detail=f"Agent error: {e}")
+
+        latency_s = round(time.perf_counter() - t0, 2)
+        obs.update(output=report)
+        obs.score_trace(name="latency_s", value=latency_s)
+
+    _tracer.flush()
     return report

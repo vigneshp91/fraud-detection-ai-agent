@@ -1,5 +1,5 @@
 from crewai import Task
-from crew_agents.agents import monitor_agent, analyst_agent, risk_score_agent, fraud_detection_agent
+from agent.core_agent import monitor_agent, analyst_agent, risk_score_agent, fraud_detection_agent
 
 
 def create_tasks(transaction_str: str) -> tuple[Task, Task, Task, Task]:

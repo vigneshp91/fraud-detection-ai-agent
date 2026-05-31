@@ -1,6 +1,6 @@
 """
 Initializes the SQLite database with mock transaction history.
-Run this once before using the agent: python data/setup_db.py
+Run once before using the agent: python data/setup_db.py
 """
 import sqlite3
 import os
@@ -38,20 +38,20 @@ def setup_database():
         return
 
     merchants = {
-        "groceries":  ["Whole Foods", "Trader Joe's", "Safeway", "Kroger"],
-        "gas":        ["Shell", "Chevron", "BP", "ExxonMobil"],
-        "restaurant": ["McDonald's", "Chipotle", "Starbucks", "Olive Garden"],
-        "electronics":["Apple Store", "Best Buy", "Amazon", "Newegg"],
-        "travel":     ["Delta Airlines", "Marriott", "Airbnb", "Expedia"],
-        "atm":        ["ATM Withdrawal", "Cash Advance"],
-        "online":     ["eBay", "Etsy", "Shopify Store", "Unknown Merchant"],
+        "groceries":   ["Whole Foods", "Trader Joe's", "Safeway", "Kroger"],
+        "gas":         ["Shell", "Chevron", "BP", "ExxonMobil"],
+        "restaurant":  ["McDonald's", "Chipotle", "Starbucks", "Olive Garden"],
+        "electronics": ["Apple Store", "Best Buy", "Amazon", "Newegg"],
+        "travel":      ["Delta Airlines", "Marriott", "Airbnb", "Expedia"],
+        "atm":         ["ATM Withdrawal", "Cash Advance"],
+        "online":      ["eBay", "Etsy", "Shopify Store", "Unknown Merchant"],
     }
 
     locations_normal = ["New York, NY", "Los Angeles, CA", "Chicago, IL", "Houston, TX"]
     locations_risky  = ["Lagos, Nigeria", "Minsk, Belarus", "Unknown Location", "Bogotá, Colombia"]
 
     users = ["user_001", "user_002", "user_003"]
-    rows = []
+    rows  = []
 
     base_time = datetime.now() - timedelta(days=90)
     for user in users:
@@ -66,7 +66,6 @@ def setup_database():
                              hours=random.randint(8, 22))).strftime("%Y-%m-%d %H:%M:%S")
                 rows.append((user, amount, merchant, category, location, ts, 0))
 
-        # Inject fraudulent transactions
         for _ in range(5):
             category = random.choice(["electronics", "online", "atm"])
             merchant = random.choice(merchants[category])

@@ -1,62 +1,21 @@
-# AI Fraud Detection Agent
+# AI Fraud Detection Agent — Capstone
 
-An intelligent fraud detection system powered by agentic AI (CrewAI + Claude) that analyzes financial transactions and returns a structured risk report.
+A multi-agent fraud detection system built with CrewAI. Analyzes financial transactions through a pipeline of specialist agents and returns a structured risk report.
 
-## Architecture
-
-Four agents run sequentially, each passing context to the next:
-
-```
-Transaction in
-      │
-      ▼
- Monitor Agent          ← flags anomalies (time, location, amount, merchant)
-      │
-      ▼
- Analyst Agent          ← fetches user history from SQLite, builds baseline
-      │
-      ▼
- Risk Score Agent       ← combines signals into a preliminary 0–100 score
-      │
-      ▼
- Orchestrator Agent     ← reconciles all findings, issues final verdict
-      │
-      ▼
- JSON Report out        ← risk_score, risk_level, risk_factors, recommendation, summary
-```
-
-## Installation
+## Quickstart
 
 ```bash
 pip install -r requirements.txt
+cp .env.example .env          # add your OPENAI_API_KEY
+python data/setup_db.py       # seed the SQLite transaction database
+python demo_agent/scripts/run_agent.py   # run the CLI demo
 ```
 
-Copy `.env.example` to `.env` and add your Anthropic API key:
-
-```
-ANTHROPIC_API_KEY=sk-ant-...
-```
-
-## Running
-
-### CLI (demo mode)
-
-Runs three built-in demo transactions (low / medium / high risk):
+## Run the API
 
 ```bash
-python main.py
-```
-
-Pass a custom transaction as a JSON string:
-
-```bash
-python main.py '{"transaction_id":"txn_001","user_id":"user_001","amount":4500,"merchant":"Unknown Merchant","category":"online","location":"Lagos, Nigeria","timestamp":"2026-04-26 03:47:00"}'
-```
-
-### API server
-
-```bash
-uvicorn api:app --reload
+uvicorn deployment.app:app --reload
+# Open http://localhost:8000/docs
 ```
 
 The server starts at `http://localhost:8000`.
@@ -110,14 +69,49 @@ curl -X POST http://localhost:8000/analyze \
 | 61 – 85 | HIGH | BLOCK |
 | 86 – 100 | CRITICAL | BLOCK |
 
-## Configuration
 
-Set model and environment variables in `.env`:
-
+## Run Evaluation
+```bash
+pip install -r requirements.txt
+cp .env.example .env          # add your OPENAI_API_KEY
+python scripts/run_evaluation.py
 ```
-ANTHROPIC_API_KEY=sk-ant-...
+
+
+## Project Structure
+
+| Directory | Purpose |
+|---|---|
+| `agent/` | Agent definitions, crew builder, task planner, prompts, memory |
+| `tools/` | CrewAI tools — DB lookup, escalation, tool registry |
+| `retrieval/` | RAG pipeline — document loader, chunker, embedder, FAISS store |
+| `data/` | SQLite DB, policy rules, RLHF feedback, evaluation test cases |
+| `knowledge/` | Raw documents, processed chunks, FAISS index |
+| `deployment/` | FastAPI app and config |
+| `scripts/` | CLI entry points for all pipelines |
+| `safety/` | Guardrails and PII filter |
+| `monitoring/` | LangSmith and Langfuse integrations |
+| `evaluation/` | Test harness and metrics |
+| `policy_rlhf/` | Policy checker, feedback collector, policy updater |
+| `mcp/` | Model Context Protocol server and client |
+| `docs/` | Problem framing, demo script, evaluation report, engineering justification |
+| `logs/` | Runtime logs |
+
+## Agents
+
+1. **Transaction Anomaly Monitor** — flags unusual time, location, amount, or merchant.
+2. **Transaction History Analyst** — retrieves user history and builds a behavioral baseline.
+3. **Risk Score Calculator** — fuses signals into a 0–100 risk score.
+4. **Fraud Detection Orchestrator** — synthesizes findings into the final JSON report.
+
+## Output Schema
+
+```json
+{
+  "risk_score": 87,
+  "risk_level": "CRITICAL",
+  "risk_factors": ["3 AM transaction", "High-risk geography", "Amount 10x user average"],
+  "recommendation": "BLOCK",
+  "summary": "..."
+}
 ```
-
-## License
-
-MIT

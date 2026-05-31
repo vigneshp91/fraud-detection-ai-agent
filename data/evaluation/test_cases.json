@@ -1,0 +1,53 @@
+[
+  {
+    "id": "tc_001",
+    "description": "Low-risk routine purchase",
+    "input": {
+      "transaction_id": "txn_tc_001",
+      "user_id": "user_001",
+      "amount": 45.50,
+      "merchant": "Starbucks",
+      "category": "restaurant",
+      "location": "New York, NY",
+      "timestamp": "2026-04-26 09:15:00"
+    },
+    "expected": {
+      "risk_level": "LOW",
+      "recommendation": "APPROVE"
+    }
+  },
+  {
+    "id": "tc_002",
+    "description": "High-risk late-night foreign transaction",
+    "input": {
+      "transaction_id": "txn_tc_002",
+      "user_id": "user_003",
+      "amount": 2200.00,
+      "merchant": "Unknown Merchant",
+      "category": "online",
+      "location": "Lagos, Nigeria",
+      "timestamp": "2026-04-26 03:47:00"
+    },
+    "expected": {
+      "risk_level": "HIGH",
+      "recommendation": "BLOCK"
+    }
+  },
+  {
+    "id": "tc_003",
+    "description": "Medium-risk electronics purchase",
+    "input": {
+      "transaction_id": "txn_tc_003",
+      "user_id": "user_002",
+      "amount": 380.00,
+      "merchant": "Apple Store",
+      "category": "electronics",
+      "location": "Chicago, IL",
+      "timestamp": "2026-04-26 14:30:00"
+    },
+    "expected": {
+      "risk_level": "MEDIUM",
+      "recommendation": "REVIEW"
+    }
+  }
+]

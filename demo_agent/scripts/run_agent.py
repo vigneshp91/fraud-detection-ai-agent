@@ -1,27 +1,28 @@
 """
-AI Fraud Detection Agent — entry point.
+AI Fraud Detection Agent — CLI entry point.
 
-Usage:
-    python main.py                        # runs with the built-in demo transaction
-    python main.py '{"user_id": "user_001", "amount": 4500, ...}'  # custom JSON
+Usage :
+    python scripts/run_agent.py                        # runs built-in demo transactions
+    python scripts/run_agent.py '{"user_id": "user_001", "amount": 4500, ...}'
 """
 import json
 import os
 import sys
 
+# Ensure repo root is on sys.path when running this file directly.
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# Seed the database if it doesn't exist yet
 from data.setup_db import setup_database
 setup_database()
 
-from crew import build_crew
+from agent.core_agent import build_crew
 
-# ---------------------------------------------------------------------------
-# Sample transactions to demo different risk levels
-# ---------------------------------------------------------------------------
 DEMO_TRANSACTIONS = {
     "low_risk": {
         "transaction_id": "txn_low_001",
@@ -54,18 +55,15 @@ DEMO_TRANSACTIONS = {
 
 
 def run(transaction: dict) -> dict:
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("  AI FRAUD DETECTION AGENT")
-    print("="*60)
+    print("=" * 60)
     print(f"\nAnalyzing transaction:\n{json.dumps(transaction, indent=2)}\n")
 
     crew   = build_crew(transaction)
     result = crew.kickoff()
 
-    # CrewAI returns the final task output as a string; parse it back to dict
     raw = result.raw if hasattr(result, "raw") else str(result)
-
-    # Strip markdown code fences if the LLM wrapped the JSON
     raw = raw.strip()
     if raw.startswith("```"):
         raw = raw.split("```")[1]
@@ -78,29 +76,25 @@ def run(transaction: dict) -> dict:
     except json.JSONDecodeError:
         report = {"raw_output": raw}
 
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("  FRAUD RISK REPORT")
-    print("="*60)
+    print("=" * 60)
     print(json.dumps(report, indent=2))
     return report
 
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:
-        # Accept a JSON string as a CLI argument
         try:
             tx = json.loads(sys.argv[1])
         except json.JSONDecodeError as e:
             print(f"Invalid JSON argument: {e}")
             sys.exit(1)
+        run(tx)
     else:
-        # Default: run all three demo transactions
         for label, tx in DEMO_TRANSACTIONS.items():
-            print(f"\n{'#'*60}")
+            print(f"\n{'#' * 60}")
             print(f"  DEMO: {label.upper().replace('_', ' ')}")
-            print(f"{'#'*60}")
+            print(f"{'#' * 60}")
             run(tx)
             input("\nPress Enter to continue to the next demo...\n")
-        sys.exit(0)
-
-    run(tx)

@@ -1,3 +1,10 @@
 .env
 __pycache__/
+*.pyc
+*.pyo
 *.db
+*.faiss
+*.pkl
+logs/*.log
+knowledge/faiss_index/
+knowledge/processed/chunks.json
