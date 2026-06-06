@@ -17,7 +17,7 @@ fraud_detection_agent = Agent(
         "a thorough, multi-dimensional fraud assessment before a decision is made."
     ),
     allow_delegation=False,
-    verbose=True,
+    
 )
 
 # ── Monitor Agent — flags surface-level anomalies ─────────────────────────────
@@ -33,7 +33,7 @@ monitor_agent = Agent(
         "purchase — before deeper analysis begins."
     ),
     allow_delegation=False,
-    verbose=True,
+    
 )
 
 # ── Analyst Agent — retrieves and interprets transaction history ───────────────
@@ -49,7 +49,7 @@ analyst_agent = Agent(
     ),
     tools=[_db_tool],
     allow_delegation=False,
-    verbose=True,
+    
 )
 
 # ── Risk Score Agent — fuses signals into a 0–100 score ───────────────────────
@@ -65,7 +65,7 @@ risk_score_agent = Agent(
         "final number with concrete evidence."
     ),
     allow_delegation=False,
-    verbose=True,
+    
 )
 
 

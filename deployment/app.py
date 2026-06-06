@@ -25,8 +25,11 @@ setup_database()
 from agent.core_agent import build_crew
 from deployment.config import settings
 from monitoring.langfuse_logger import LangfuseLogger
+from logs.logging_utils import new_request_id, log_event
+from safety.guardrails import Guardrails
 
 _tracer = LangfuseLogger()
+_guardrails = Guardrails()
 
 
 @asynccontextmanager
@@ -78,8 +81,28 @@ def _parse_crew_output(result) -> dict:
 
 def _run_crew_sync(tx: dict) -> dict:
     """Blocking call — runs in a thread so the event loop stays free."""
-    crew = build_crew(tx)
+    # Sanitize, mask PII, and check for prompt injection before sending to agents
+    sanitized_tx = {
+        k: _guardrails.mask_pii(_guardrails.sanitize(v)) if isinstance(v, str) else v
+        for k, v in tx.items()
+    }
+    combined_input = " ".join(str(v) for v in sanitized_tx.values())
+    is_safe, reason = _guardrails.check_input(combined_input)
+    if not is_safe:
+        raise ValueError(f"Input blocked by guardrails: {reason}")
+    log_event("Input sanitized, PII masked, and passed guardrail checks.", new_request_id(), input=sanitized_tx)
+    crew = build_crew(sanitized_tx)
     result = crew.kickoff()
+
+    # Mask PII in agent output and check before returning
+    # raw = result.raw if hasattr(result, "raw") else str(result)
+    # raw = _guardrails.mask_pii(raw)
+    # if hasattr(result, "raw"):
+    #     result.raw = raw
+    # is_safe, reason = _guardrails.check_output(raw)
+    # if not is_safe:
+    #     raise ValueError(f"Output blocked by guardrails: {reason}")
+
     try:
         return _parse_crew_output(result)
     except json.JSONDecodeError as e:
@@ -100,7 +123,10 @@ def health():
     responses={500: {"description": "Agent error or non-JSON output"}},
 )
 async def analyze(transaction: TransactionRequest):
-    """Analyze a financial transaction and return a fraud risk report."""
+    request_id = new_request_id()
+    log_event("http_request", request_id, path="/analyze")
+
+    log_event("Analyze a financial transaction and return a fraud risk report.",request_id)
     tx_dict = transaction.model_dump()
     with _tracer.observe(
         name=f"analyze/{transaction.transaction_id}",

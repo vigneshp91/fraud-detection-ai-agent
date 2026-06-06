@@ -12,6 +12,9 @@ _PATTERNS = {
 def redact(text: str, replacement: str = "[REDACTED]") -> str:
     """Replace detected PII patterns with a placeholder."""
     for _name, pattern in _PATTERNS.items():
+        if _name == "credit_card":
+            # For credit cards, mask all but the last 4 digits
+            text = mask_credit_cards(text,pattern)
         text = pattern.sub(replacement, text)
     return text
 
@@ -19,3 +22,14 @@ def redact(text: str, replacement: str = "[REDACTED]") -> str:
 def detect(text: str) -> list[str]:
     """Return a list of PII type names found in text."""
     return [name for name, pattern in _PATTERNS.items() if pattern.search(text)]
+
+
+
+def mask_credit_cards(text: str, pattern: re.Pattern) -> str:
+    def replace(m: re.Match) -> str:
+        digits = re.sub(r"[ -]", "", m.group())
+        if len(digits) < 13 or len(digits) > 19:
+            return m.group()
+        return f"****-****-****-{digits[-4:]}"
+
+    return pattern.sub(replace, text)
