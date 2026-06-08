@@ -1,8 +1,10 @@
 import json
 from crewai import Agent, Crew, Process
-from tools.tool_search import TransactionHistoryTool
+from tools.mcp_transaction_tool import MCPTransactionHistoryTool
+from tools.mcp_escalation_tool import MCPEscalationTool
 
-_db_tool = TransactionHistoryTool()
+_db_tool         = MCPTransactionHistoryTool()
+_escalation_tool = MCPEscalationTool()
 
 # ── Orchestrator ───────────────────────────────────────────────────────────────
 fraud_detection_agent = Agent(
@@ -16,8 +18,9 @@ fraud_detection_agent = Agent(
         "You manage a team of specialist analysts and ensure every transaction receives "
         "a thorough, multi-dimensional fraud assessment before a decision is made."
     ),
+    tools=[_escalation_tool],
     allow_delegation=False,
-    
+
 )
 
 # ── Monitor Agent — flags surface-level anomalies ─────────────────────────────
