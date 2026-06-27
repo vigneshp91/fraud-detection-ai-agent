@@ -73,9 +73,19 @@ risk_score_agent = Agent(
 
 
 def build_crew(transaction_json: dict) -> Crew:
+    import os
     from agent.planner import create_tasks
+    from policy_rlhf.feedback_context import build_feedback_context
+
+    _feedback_store_path = os.path.join(
+        os.path.dirname(__file__), "..", "data", "rlhf", "feedback_store.json"
+    )
+    feedback_context = build_feedback_context(_feedback_store_path)
+
     tx_str = json.dumps(transaction_json, indent=2)
-    anomaly_task, history_task, risk_task, final_task = create_tasks(tx_str)
+    anomaly_task, history_task, risk_task, final_task = create_tasks(
+        tx_str, feedback_context=feedback_context
+    )
     return Crew(
         agents=[monitor_agent, analyst_agent, risk_score_agent, fraud_detection_agent],
         tasks=[anomaly_task, history_task, risk_task, final_task],

@@ -64,6 +64,8 @@ class FraudReport(BaseModel):
     risk_factors: list[str]
     recommendation: str
     summary: str
+    escalated: bool = False
+    rlhf_adjustment: str | None = None
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────

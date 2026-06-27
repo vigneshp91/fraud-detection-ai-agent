@@ -15,15 +15,29 @@ class FeedbackCollector:
         with open(self.store_path) as f:
             return json.load(f)
 
-    def record(self, transaction_id: str, rating: int, comment: str = "") -> None:
-        """Append a feedback entry (rating 1–5) for a transaction."""
+    def record(
+        self,
+        transaction_id: str,
+        rating: int,
+        comment: str = "",
+        transaction_meta: dict | None = None,
+    ) -> None:
+        """Append a feedback entry (rating 1–5) for a transaction.
+
+        transaction_meta should contain the fields needed for feedback-loop
+        context injection: category, merchant, location, amount, risk_level,
+        risk_score, recommendation.
+        """
         entries = self.load_all()
-        entries.append({
+        entry: dict = {
             "transaction_id": transaction_id,
-            "rating": rating,
-            "comment": comment,
-            "timestamp": datetime.utcnow().isoformat(),
-        })
+            "rating":         rating,
+            "comment":        comment,
+            "timestamp":      datetime.utcnow().isoformat(),
+        }
+        if transaction_meta:
+            entry["transaction_meta"] = transaction_meta
+        entries.append(entry)
         os.makedirs(os.path.dirname(self.store_path), exist_ok=True)
         with open(self.store_path, "w") as f:
             json.dump(entries, f, indent=2)

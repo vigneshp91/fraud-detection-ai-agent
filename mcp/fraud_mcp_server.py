@@ -78,14 +78,28 @@ def _transaction_history_lookup(user_id: str) -> str:
     return json.dumps(summary, indent=2)
 
 
+_ESCALATIONS_LOG = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "logs", "escalations.log")
+)
+
+
+def _append_escalation(payload: dict) -> None:
+    os.makedirs(os.path.dirname(_ESCALATIONS_LOG), exist_ok=True)
+    with open(_ESCALATIONS_LOG, "a") as f:
+        f.write(json.dumps(payload) + "\n")
+
+
 def _escalate_case(transaction_id: str, reason: str, risk_score: int) -> str:
+    from datetime import datetime, timezone
     payload = {
         "transaction_id": transaction_id,
         "risk_score":     risk_score,
         "reason":         reason,
         "status":         "ESCALATED",
+        "timestamp":      datetime.now(tz=timezone.utc).isoformat(),
     }
     logger.warning("MCP ESCALATION: %s", json.dumps(payload))
+    _append_escalation(payload)
     return json.dumps({
         "escalated":      True,
         "transaction_id": transaction_id,
