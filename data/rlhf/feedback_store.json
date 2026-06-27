@@ -43,5 +43,29 @@
       "risk_score": 18,
       "recommendation": "APPROVE"
     }
+  },
+  {
+    "transaction_id": "txn_high_001",
+    "rating": 2,
+    "comment": "False positive \u2014 regular business expense, customer confirmed",
+    "timestamp": "2026-06-27T10:41:14.121149",
+    "transaction_meta": {
+      "risk_score": 87,
+      "risk_level": "CRITICAL",
+      "recommendation": "BLOCK",
+      "reason": "3 AM transaction in high-risk location, 10x avg amount"
+    }
+  },
+  {
+    "transaction_id": "txn_1782555778",
+    "rating": 4,
+    "comment": "",
+    "timestamp": "2026-06-27T10:44:43.532031",
+    "transaction_meta": {
+      "risk_score": 30,
+      "risk_level": "MEDIUM",
+      "recommendation": "BLOCK",
+      "reason": "Transaction for groceries in a common location with a reasonable amount, but past false positives warrant cautious review."
+    }
   }
 ]

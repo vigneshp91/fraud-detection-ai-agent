@@ -848,18 +848,107 @@ with tab_escalations:
         )
         st.dataframe(styled, use_container_width=True, hide_index=True)
 
-        # ── Per-entry detail expanders ─────────────────────────────────────
-        st.subheader("Entry Details")
-        for entry in reversed(escalations):
-            score  = entry.get("risk_score", 0)
-            color  = "#8b0000" if score >= 86 else "#e05d00"
-            label  = f"{_badge(str(score), color)} &nbsp; {entry.get('transaction_id', '—')} &nbsp; {entry.get('timestamp', '')}"
-            with st.expander(entry.get("transaction_id", "—") + f"  |  score {score}  |  {entry.get('timestamp', '')}"):
-                st.markdown(f"**Risk Score:** {_badge(str(score), color)}", unsafe_allow_html=True)
-                st.markdown(f"**Status:** `{entry.get('status', '—')}`")
-                st.markdown(f"**Reason:** {entry.get('reason', '—')}")
-                st.markdown(f"**Timestamp:** `{entry.get('timestamp', '—')}`")
-                st.json(entry)
+        # ── Per-entry review + feedback ────────────────────────────────────
+        st.subheader("Review Escalations")
+        st.caption("Rate each decision to feed it back into the RLHF loop for future analyses.")
+
+        existing_feedback   = _feedback_store.load_all()
+        already_reviewed    = {e["transaction_id"] for e in existing_feedback}
+
+        for i, entry in enumerate(reversed(escalations)):
+            score    = entry.get("risk_score", 0)
+            tx_id    = entry.get("transaction_id", "—")
+            reviewed = tx_id in already_reviewed
+            color    = "#8b0000" if score >= 86 else "#e05d00"
+
+            risk_level = (
+                "CRITICAL" if score >= 86 else
+                "HIGH"     if score >= 61 else
+                "MEDIUM"   if score >= 26 else "LOW"
+            )
+
+            expander_label = (
+                f"{tx_id}  |  score {score}  |  {entry.get('timestamp', '')}  "
+                + ("  ✅ Reviewed" if reviewed else "  ⏳ Pending review")
+            )
+
+            with st.expander(expander_label):
+                detail_col, feedback_col = st.columns([1, 1], gap="large")
+
+                # ── Left: escalation details ───────────────────────────────
+                with detail_col:
+                    st.markdown("**Escalation Details**")
+                    st.markdown(
+                        f"**Risk Score:** {_badge(str(score), color)}",
+                        unsafe_allow_html=True,
+                    )
+                    st.markdown(
+                        f"**Risk Level:** {_badge(risk_level, RISK_COLORS.get(risk_level, color))}",
+                        unsafe_allow_html=True,
+                    )
+                    st.markdown(
+                        f"**Recommendation:** {_badge('BLOCK', REC_COLORS['BLOCK'])}",
+                        unsafe_allow_html=True,
+                    )
+                    st.markdown(f"**Reason:** {entry.get('reason', '—')}")
+                    st.markdown(f"**Timestamp:** `{entry.get('timestamp', '—')}`")
+
+                    with st.expander("Raw JSON"):
+                        st.json(entry)
+
+                # ── Right: feedback form ───────────────────────────────────
+                with feedback_col:
+                    st.markdown("**Analyst Review**")
+
+                    if reviewed:
+                        prior = next(
+                            (e for e in existing_feedback if e["transaction_id"] == tx_id),
+                            None,
+                        )
+                        if prior:
+                            st.success(
+                                f"Already submitted: {STAR_MAP.get(prior['rating'], '?')}  "
+                                f"({prior['rating']}/5)"
+                            )
+                            if prior.get("comment"):
+                                st.caption(f"Note: {prior['comment']}")
+
+                    with st.form(f"esc_fb_{tx_id}_{i}"):
+                        fb_rating = st.slider(
+                            "Rating  (1 = wrong decision · 5 = correct block)",
+                            1, 5, 3,
+                        )
+                        st.caption(f"{STAR_MAP[fb_rating]}  ({fb_rating}/5)")
+                        fb_comment = st.text_area(
+                            "Review notes (optional)",
+                            max_chars=500,
+                            placeholder=(
+                                "e.g. 'False positive — confirmed regular business expense'\n"
+                                "or 'Correct block — customer reported as stolen card'"
+                            ),
+                        )
+                        fb_submit = st.form_submit_button(
+                            "✅ Submit Review", use_container_width=True
+                        )
+
+                    if fb_submit:
+                        tx_meta = {
+                            "risk_score":     score,
+                            "risk_level":     risk_level,
+                            "recommendation": "BLOCK",
+                            "reason":         entry.get("reason", ""),
+                        }
+                        _feedback_store.record(
+                            tx_id, fb_rating, fb_comment,
+                            transaction_meta=tx_meta,
+                        )
+                        already_reviewed.add(tx_id)
+                        st.success(
+                            f"Review saved for **{tx_id}** — {STAR_MAP[fb_rating]}"
+                        )
+                        st.caption(
+                            "The Orchestrator will use this on the next transaction analysis."
+                        )
 
         # ── Raw log ────────────────────────────────────────────────────────
         with st.expander("📄 Raw log file"):
