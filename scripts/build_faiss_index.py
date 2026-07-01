@@ -9,6 +9,9 @@ import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from dotenv import load_dotenv
+load_dotenv()
+
 from retrieval.embedder import Embedder
 from retrieval.faiss_store import FAISSStore
 from retrieval.chunker import load_chunks

@@ -1,9 +1,10 @@
 """
 Fraud-domain MCP server.
 
-Registers two tools:
+Registers three tools:
   - transaction_history_lookup  (reads SQLite)
   - escalate_case               (routes to fraud review team)
+  - retrieve_knowledge          (semantic search over FAISS knowledge base)
 
 Exposes a module-level `fraud_mcp_client` that CrewAI tools import to make
 MCP calls without caring about the transport underneath.
@@ -107,6 +108,36 @@ def _escalate_case(transaction_id: str, reason: str, risk_score: int) -> str:
     })
 
 
+_KNOWLEDGE_INDEX_DIR = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "knowledge", "faiss_index")
+)
+
+
+def _retrieve_knowledge(query: str, top_k: int = 3) -> str:
+    try:
+        from retrieval.retriever import Retriever
+        retriever = Retriever(index_dir=_KNOWLEDGE_INDEX_DIR)
+        chunks = retriever.retrieve(query, top_k=top_k)
+        if not chunks:
+            return json.dumps({"results": [], "message": "No relevant policy chunks found."})
+        results = [
+            {"source": c.get("source", "unknown"), "text": c.get("text", "")}
+            for c in chunks
+        ]
+        return json.dumps({"results": results})
+    except FileNotFoundError:
+        return json.dumps({
+            "results": [],
+            "message": (
+                "FAISS index not found. Build it first: "
+                "python scripts/ingest_documents.py && python scripts/build_faiss_index.py"
+            ),
+        })
+    except Exception as exc:
+        logger.warning("retrieve_knowledge failed: %s", exc)
+        return json.dumps({"results": [], "message": str(exc)})
+
+
 # ── Server bootstrap ──────────────────────────────────────────────────────────
 
 def _build_server() -> MCPServer:
@@ -158,6 +189,31 @@ def _build_server() -> MCPServer:
                 },
             },
             "required": ["transaction_id", "reason", "risk_score"],
+        },
+    )
+
+    server.register_tool(
+        name="retrieve_knowledge",
+        handler=_retrieve_knowledge,
+        description=(
+            "Searches the fraud detection policy knowledge base using semantic search. "
+            "Returns relevant policy chunks about risk scoring rules, high-risk indicators, "
+            "escalation thresholds, and known false positive patterns."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "The search query to retrieve relevant fraud policy chunks",
+                },
+                "top_k": {
+                    "type": "integer",
+                    "description": "Number of chunks to retrieve (default 3)",
+                    "default": 3,
+                },
+            },
+            "required": ["query"],
         },
     )
 

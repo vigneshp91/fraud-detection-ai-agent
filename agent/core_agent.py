@@ -2,9 +2,11 @@ import json
 from crewai import Agent, Crew, Process
 from tools.mcp_transaction_tool import MCPTransactionHistoryTool
 from tools.mcp_escalation_tool import MCPEscalationTool
+from tools.mcp_retrieval_tool import MCPRetrievalTool
 
 _db_tool         = MCPTransactionHistoryTool()
 _escalation_tool = MCPEscalationTool()
+_retrieval_tool  = MCPRetrievalTool()
 
 # ── Orchestrator ───────────────────────────────────────────────────────────────
 fraud_detection_agent = Agent(
@@ -60,19 +62,19 @@ risk_score_agent = Agent(
     role="Risk Score Calculator",
     goal=(
         "Combine anomaly flags from the Monitor and the behavioral baseline from the Analyst "
-        "to produce a single, defensible risk score between 0 and 100."
+        "to produce a single, defensible risk score between 0 and 100, backed by policy rules."
     ),
     backstory=(
         "You are a quantitative risk modeler who specializes in fusing multiple weak signals "
-        "into a single risk score. You weigh each factor carefully and always justify your "
-        "final number with concrete evidence."
+        "into a single risk score. You always consult the official fraud detection policy "
+        "before scoring, so every number you produce is grounded in written guidelines."
     ),
+    tools=[_retrieval_tool],
     allow_delegation=False,
-    
 )
 
 
-def build_crew(transaction_json: dict) -> Crew:
+def build_crew(transaction_json: dict, session_memory=None) -> Crew:
     import os
     from agent.planner import create_tasks
     from policy_rlhf.feedback_context import build_feedback_context
@@ -82,9 +84,18 @@ def build_crew(transaction_json: dict) -> Crew:
     )
     feedback_context = build_feedback_context(_feedback_store_path)
 
+    memory_context = ""
+    if session_memory is not None and len(session_memory) > 0:
+        lines = []
+        history = session_memory.get_history()
+        for entry in history:
+            role = "Transaction" if entry["role"] == "user" else "Decision"
+            lines.append(f"  [{role}] {entry['content']}")
+        memory_context = "PRIOR DECISIONS IN THIS SESSION:\n" + "\n".join(lines)
+
     tx_str = json.dumps(transaction_json, indent=2)
     anomaly_task, history_task, risk_task, final_task = create_tasks(
-        tx_str, feedback_context=feedback_context
+        tx_str, feedback_context=feedback_context, memory_context=memory_context
     )
     return Crew(
         agents=[monitor_agent, analyst_agent, risk_score_agent, fraud_detection_agent],

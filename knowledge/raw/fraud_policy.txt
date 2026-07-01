@@ -1,0 +1,87 @@
+FRAUD DETECTION POLICY — RISK SCORING GUIDELINES
+Version 2.0 | Financial Fraud Operations
+
+==========================================================
+1. RISK SCORE THRESHOLDS
+==========================================================
+
+Score 0–25   → LOW RISK    → Recommendation: APPROVE
+Score 26–60  → MEDIUM RISK → Recommendation: REVIEW
+Score 61–85  → HIGH RISK   → Recommendation: BLOCK + Escalate
+Score 86–100 → CRITICAL    → Recommendation: BLOCK + Escalate immediately
+
+Any transaction scoring >= 61 MUST be escalated to the human fraud review team.
+
+==========================================================
+2. HIGH-RISK INDICATORS (add 20–30 points each)
+==========================================================
+
+- Transaction at 2:00 AM – 5:00 AM local time (late-night anomaly)
+- Location is a high-fraud geography: Nigeria, Romania, Belarus, Ukraine (non-travel context)
+- Transaction amount > $1,000 with no prior large-spend history for this user
+- Merchant categorized as "unknown" or missing merchant name
+- Online category purchase from a foreign IP or atypical location
+- More than 3 fraud flags in the user's last 30 transactions
+
+==========================================================
+3. MEDIUM-RISK INDICATORS (add 10–15 points each)
+==========================================================
+
+- Transaction amount 2x above the user's historical average
+- New location not seen in the user's last 30 transactions
+- Electronics purchase over $300 without prior electronics history
+- ATM withdrawal in a foreign city
+- Transaction in a category with zero prior history for this user
+
+==========================================================
+4. LOW-RISK INDICATORS (subtract 5–10 points)
+==========================================================
+
+- Merchant is a known national chain (Starbucks, McDonald's, Walmart, Amazon)
+- Transaction location matches user's most frequent city
+- Amount is within 1 standard deviation of user's average spend
+- Category is the user's top-3 most used categories
+- Daytime transaction (9 AM – 7 PM)
+
+==========================================================
+5. AUTOMATIC BLOCK RULES
+==========================================================
+
+- Any transaction from a country with a travel advisory AND amount > $500
+- Velocity rule: more than 5 transactions in 30 minutes from different locations
+- Duplicate transaction: same amount, merchant, and user within 10 minutes
+- Card-present transaction while card is flagged as lost or stolen
+
+==========================================================
+6. ESCALATION PROTOCOL
+==========================================================
+
+When escalating, the fraud review team requires:
+- Transaction ID
+- Specific risk factors that triggered escalation
+- Preliminary risk score
+- User's historical fraud flag count
+
+All escalations are logged and reviewed within 4 business hours.
+A human analyst can override the agent recommendation; that override
+is recorded as RLHF feedback for future model calibration.
+
+==========================================================
+7. PII AND DATA HANDLING
+==========================================================
+
+- Full card numbers must never appear in agent reasoning or logs
+- User names are acceptable in internal logs but not in output reports
+- Location at city/country level is permitted; street address is not
+- All agent outputs are PII-scrubbed before storage
+
+==========================================================
+8. KNOWN FALSE POSITIVE PATTERNS
+==========================================================
+
+- Electronics retailers (Apple Store, Best Buy) routinely trigger medium risk
+  for first-time purchasers — verify with user history before blocking
+- Travel transactions naturally appear in unusual locations — check for
+  prior flight/hotel purchases in the same time window
+- Online gaming platforms generate repeated small charges that may look
+  like velocity fraud — category context matters

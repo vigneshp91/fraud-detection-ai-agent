@@ -29,7 +29,7 @@
       "timestamp": "2026-04-26 03:47:00"
     },
     "expected": {
-      "risk_level": "HIGH",
+      "risk_level": "CRITICAL",
       "recommendation": "BLOCK"
     }
   },

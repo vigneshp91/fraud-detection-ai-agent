@@ -33,6 +33,7 @@ from safety.pii_filter import detect as detect_pii
 from policy_rlhf.feedback_collector import FeedbackCollector
 from policy_rlhf.policy_checker import PolicyChecker
 from mcp.fraud_mcp_server import fraud_mcp_client
+from agent.memory import ConversationMemory
 
 _ROOT            = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 _FEEDBACK_PATH   = os.path.join(_ROOT, "data", "rlhf", "feedback_store.json")
@@ -46,12 +47,14 @@ _policy_checker = PolicyChecker(_POLICY_PATH)
 
 # ── Session state ─────────────────────────────────────────────────────────────
 for _key, _default in [
-    ("last_report",  None),
-    ("last_tx_id",   ""),
-    ("last_tx",      {}),
-    ("last_safety",  {}),   # guardrail + PII results for the last submission
-    ("eval_results", []),
-    ("form_preset",  None),
+    ("last_report",       None),
+    ("last_tx_id",        ""),
+    ("last_tx",           {}),
+    ("last_safety",       {}),   # guardrail + PII results for the last submission
+    ("eval_results",      []),
+    ("form_preset",       None),
+    ("session_memory",    ConversationMemory()),
+    ("last_latency",      None),
 ]:
     if _key not in st.session_state:
         st.session_state[_key] = _default
@@ -122,7 +125,7 @@ def _parse_crew_output(result) -> dict:
     return json.loads(raw)
 
 
-def _run_analysis(tx: dict) -> tuple[dict, float]:
+def _run_analysis(tx: dict, memory: ConversationMemory) -> tuple[dict, float]:
     from agent.core_agent import build_crew
     sanitized = {
         k: _guardrails.mask_pii(_guardrails.sanitize(v)) if isinstance(v, str) else v
@@ -133,7 +136,7 @@ def _run_analysis(tx: dict) -> tuple[dict, float]:
     if not is_safe:
         raise ValueError(f"Input blocked by guardrails: {reason}")
     t0 = time.perf_counter()
-    crew = build_crew(sanitized)
+    crew = build_crew(sanitized, session_memory=memory)
     result = crew.kickoff()
     latency = round(time.perf_counter() - t0, 2)
     return _parse_crew_output(result), latency
@@ -194,6 +197,7 @@ def _load_policy() -> dict:
 _openai_ok   = bool(os.environ.get("OPENAI_API_KEY"))
 _db_ok       = os.path.exists(os.path.join(_ROOT, "data", "transactions.db"))
 _langfuse_ok = bool(os.environ.get("LANGFUSE_PUBLIC_KEY"))
+_faiss_ok    = os.path.exists(os.path.join(_ROOT, "knowledge", "faiss_index", "index.faiss"))
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -208,23 +212,41 @@ with st.sidebar:
     st.subheader("System Status")
     st.markdown("✅ OpenAI API" if _openai_ok else "❌ OpenAI API key missing")
     st.markdown("✅ Database ready" if _db_ok else "⚠️ Database missing — run `data/setup_db.py`")
+    st.markdown("✅ FAISS index ready" if _faiss_ok else "⚠️ FAISS index missing — run `scripts/build_faiss_index.py`")
     st.markdown("✅ Langfuse active" if _langfuse_ok else "⚪ Langfuse disabled (optional)")
-    st.markdown("✅ MCP Server — in-process")
+    st.markdown("✅ MCP Server — in-process (3 tools)")
 
     st.divider()
     st.subheader("Agent Pipeline")
     st.markdown(
         "1. 👁️ **Monitor** — anomaly flags\n"
         "2. 🔎 **Analyst** — history via MCP\n"
-        "3. 📐 **Calculator** — risk score 0–100\n"
-        "4. 🧠 **Orchestrator** — final verdict"
+        "3. 📐 **Calculator** — policy lookup (FAISS) + score\n"
+        "4. 🧠 **Orchestrator** — final verdict + memory context"
     )
 
     st.divider()
-    st.caption("CrewAI → MCP → SQLite")
+    st.subheader("Session Memory")
+    mem = st.session_state.session_memory
+    if len(mem) == 0:
+        st.caption("No transactions analyzed yet this session.")
+    else:
+        history = mem.get_history()
+        # Display pairs: user tx → agent decision
+        pairs = [(history[i], history[i + 1]) for i in range(0, len(history) - 1, 2)]
+        for i, (tx_entry, decision_entry) in enumerate(pairs, 1):
+            st.markdown(f"**#{i}** {tx_entry['content']}")
+            st.caption(f"↳ {decision_entry['content']}")
+    if len(mem) > 0:
+        if st.button("🗑️ Clear Memory", use_container_width=True):
+            st.session_state.session_memory.clear()
+            st.rerun()
+
+    st.divider()
+    st.caption("CrewAI → MCP → SQLite + FAISS")
     st.caption("Transport: InProcessTransport")
     st.caption("Protocol: JSON-RPC 2.0")
-    st.caption("v1.0.0")
+    st.caption("v1.1.0")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -317,11 +339,21 @@ with tab_sim:
             else:
                 with st.spinner("Running 4-agent analysis pipeline — this takes ~30–60s…"):
                     try:
-                        report, latency = _run_analysis(tx)
-                        st.session_state.last_report = report
-                        st.session_state.last_tx_id  = tx_id
-                        st.session_state.last_tx      = tx
-                        st.session_state.last_latency = latency
+                        report, latency = _run_analysis(tx, st.session_state.session_memory)
+                        st.session_state.last_report  = report
+                        st.session_state.last_tx_id   = tx_id
+                        st.session_state.last_tx       = tx
+                        st.session_state.last_latency  = latency
+                        # Record this turn in session memory
+                        st.session_state.session_memory.add(
+                            "user",
+                            f"{tx_id}: ${amount:.2f} at {merchant}, {location}",
+                        )
+                        st.session_state.session_memory.add(
+                            "agent",
+                            f"{report.get('risk_level')} (score {report.get('risk_score')}) "
+                            f"→ {report.get('recommendation')}",
+                        )
                         st.success(f"Analysis complete in {latency}s")
                     except Exception as e:
                         st.error(f"Agent error: {e}")
